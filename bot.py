@@ -18,27 +18,6 @@ async def handle(request):
 app = web.Application()
 app.router.add_get("/", handle)
 
-# --------- IMDb Name Corrector ----------
-def correct_movie_name(query: str):
-    query = query.strip()
-    if not query:
-        return None
-
-    if query.lower() in CACHE:
-        return CACHE[query.lower()]
-
-    try:
-        results = imdb.search_movie(query)
-        if not results:
-            return None
-
-        title = results[0].get("title")
-        CACHE[query.lower()] = title
-        return title
-    except Exception as e:
-        print("IMDb Error:", e)
-        return None
-
 # ---------------- BOT -------------------
 
 bot = Client(
@@ -83,6 +62,27 @@ async def movie_handler(client, message):
         f"🎬 IMDb Name: **{correct_name}**"
     )
 
+# --------- IMDb Name Corrector ----------
+def correct_movie_name(query: str):
+    query = query.strip()
+    if not query:
+        return None
+
+    if query.lower() in CACHE:
+        return CACHE[query.lower()]
+
+    try:
+        results = imdb.search_movie(query)
+        if not results:
+            return None
+
+        title = results[0].get("title")
+        CACHE[query.lower()] = title
+        return title
+    except Exception as e:
+        print("IMDb Error:", e)
+        return None
+        
 # Run bot
 async def start_bots():
     await bot.start()
