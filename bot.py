@@ -46,7 +46,7 @@ class Bot(Client):
         )
 
 # /start
-@app.on_message(filters.command("start"))
+@Client.on_message(filters.command("start"))
 async def start(client, message):
     await message.reply_text(
         "🎬 **Movie Name Corrector Bot**\n\n"
@@ -60,7 +60,7 @@ async def start(client, message):
     )
 
 # Movie name handler
-@app.on_message(filters.text & filters.private)
+@Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
     user_text = message.text.strip()
 
