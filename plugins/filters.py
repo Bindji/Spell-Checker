@@ -26,7 +26,7 @@ def correct_movie_name(query: str):
         print("IMDb Error:", e)
         return None
       
-@bot.on_message(filters.text & filters.private)
+@Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
     user_text = message.text.strip()
     if not user_text:
