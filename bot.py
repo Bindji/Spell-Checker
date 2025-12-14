@@ -1,6 +1,7 @@
 import asyncio
 from pyrogram import Client, filters
 from imdb import IMDb
+from aiohttp import web
 
 # ---------------- CONFIG ----------------
 API_ID = 21692958
@@ -10,6 +11,12 @@ BOT_TOKEN = "7140468132:AAEBJRdQLmBbeYh1Us-LpU2NlKaG1fK-8AY"
 # ---------------------------------------
 imdb = IMDb()
 CACHE = {}
+
+async def handle(request):
+    return web.Response(text="I'm alive!")
+
+app = web.Application()
+app.router.add_get("/", handle)
 
 # --------- IMDb Name Corrector ----------
 def correct_movie_name(query: str):
@@ -33,17 +40,12 @@ def correct_movie_name(query: str):
         return None
 
 # ---------------- BOT -------------------
-class Bot(Client):
-
-    def __init__(self):
-        super().__init__(
-            name="MovieCorrectorBot",
-            api_id=API_ID,
-            api_hash=API_HASH,
-            bot_token=BOT_TOKEN,
-            workers=500,
-            sleep_threshold=5,
-        )
+app = Client(
+    "MovieCorrectorBot",
+    api_id=API_ID,
+    api_hash=API_HASH,
+    bot_token=BOT_TOKEN
+)
 
 # /start
 @Client.on_message(filters.command("start"))
@@ -81,6 +83,16 @@ async def movie_handler(client, message):
     )
 
 # Run bot
-print("🤖 Bot Started...")
-app = Bot()
-app.run()
+async def start_bots():
+    await app.start()
+    print("✅ bot started")
+    asyncio.create_task(idle())
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, port=8080)
+    await site.start()
+    print("Web server started")
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(start_bots())
+loop.run_forever()
