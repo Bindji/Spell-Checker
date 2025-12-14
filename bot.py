@@ -40,7 +40,8 @@ def correct_movie_name(query: str):
         return None
 
 # ---------------- BOT -------------------
-app = Client(
+
+bot = Client(
     "MovieCorrectorBot",
     api_id=API_ID,
     api_hash=API_HASH,
@@ -84,7 +85,7 @@ async def movie_handler(client, message):
 
 # Run bot
 async def start_bots():
-    await app.start()
+    await bot.start()
     print("✅ bot started")
     asyncio.create_task(idle())
     runner = web.AppRunner(app)
