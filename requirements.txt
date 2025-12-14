@@ -1,3 +1,4 @@
+pyrogram
+aiohttp
 imdbpy
 tgcrypto
-pyrofork==2.3.43
