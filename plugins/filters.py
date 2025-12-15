@@ -67,6 +67,9 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
     return data["results"][0]["title"]"""
 
 
+def clean_text(t: str):
+    return re.sub(r'[^a-z0-9]', '', t.lower())
+
 async def correct_movie_name(query: str):
     query = query.strip()
 
@@ -74,8 +77,9 @@ async def correct_movie_name(query: str):
     year_match = re.search(r'(19|20)\d{2}', query)
     year = int(year_match.group()) if year_match else None
 
-    # 🔹 Remove year from title
+    # 🔹 Clean title (remove year)
     title = re.sub(r'(19|20)\d{2}', '', query).strip()
+    clean_title = clean_text(title)
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
@@ -93,27 +97,35 @@ async def correct_movie_name(query: str):
     if not results:
         return None
 
-    # 🔥 STRICT YEAR FILTER
-    if year:
-        year_matched = []
-        for movie in results:
-            release_date = movie.get("release_date")
-            if release_date and release_date[:4].isdigit():
-                if int(release_date[:4]) == year:
-                    year_matched.append(movie)
+    matched = []
 
-        if year_matched:
-            results = year_matched
-        else:
-            return None  # ❌ year दिया है लेकिन match नहीं मिला
+    for movie in results:
+        release_date = movie.get("release_date")
+        movie_title = movie.get("title", "")
+        movie_clean = clean_text(movie_title)
 
-    # 🔥 Sort by popularity + votes
-    results.sort(
+        # 🔹 Year must match (if provided)
+        if year:
+            if not release_date or not release_date[:4].isdigit():
+                continue
+            if int(release_date[:4]) != year:
+                continue
+
+        # 🔹 Flexible title match (Salaar vs Salaar Part 1)
+        if clean_title in movie_clean or movie_clean in clean_title:
+            matched.append(movie)
+
+    if not matched:
+        return None
+
+    # 🔥 Pick most popular
+    matched.sort(
         key=lambda x: (x.get("vote_count", 0), x.get("popularity", 0)),
         reverse=True
     )
 
-    return results[0]["title"]
+    return matched[0]["title"]
+    
 
 @Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
