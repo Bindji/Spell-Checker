@@ -67,25 +67,26 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
     return data["results"][0]["title"]"""
 
 
-def clean_text(t: str):
-    return re.sub(r'[^a-z0-9]', '', t.lower())
+INDIAN_LANGS = {"hi", "te", "ta", "ml", "kn"}
+
+def normalize(text: str):
+    return re.sub(r'[^a-z0-9]', '', text.lower())
 
 async def correct_movie_name(query: str):
     query = query.strip()
 
-    # 🔹 Extract year (1900–2099)
+    # 🎯 Year extract
     year_match = re.search(r'(19|20)\d{2}', query)
     year = int(year_match.group()) if year_match else None
 
-    # 🔹 Clean title (remove year)
+    # 🎯 Title extract
     title = re.sub(r'(19|20)\d{2}', '', query).strip()
-    clean_title = clean_text(title)
+    norm_title = normalize(title)
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
         "api_key": API_KEY,
         "query": title,
-        "language": "en-US",
         "include_adult": "false"
     }
 
@@ -97,34 +98,44 @@ async def correct_movie_name(query: str):
     if not results:
         return None
 
-    matched = []
+    scored = []
 
-    for movie in results:
-        release_date = movie.get("release_date")
-        movie_title = movie.get("title", "")
-        movie_clean = clean_text(movie_title)
+    for m in results:
+        m_title = m.get("title", "")
+        m_norm = normalize(m_title)
+        lang = m.get("original_language")
+        vote = m.get("vote_count", 0)
+        pop = m.get("popularity", 0)
+        release = m.get("release_date", "")
 
-        # 🔹 Year must match (if provided)
+        # ❌ Year strict
         if year:
-            if not release_date or not release_date[:4].isdigit():
-                continue
-            if int(release_date[:4]) != year:
+            if not release or release[:4] != str(year):
                 continue
 
-        # 🔹 Flexible title match (Salaar vs Salaar Part 1)
-        if clean_title in movie_clean or movie_clean in clean_title:
-            matched.append(movie)
+        score = 0
 
-    if not matched:
+        # ✅ Title similarity
+        if norm_title in m_norm:
+            score += 50
+        if m_norm.startswith(norm_title):
+            score += 20
+
+        # ✅ Indian language boost
+        if lang in INDIAN_LANGS:
+            score += 40
+
+        # ✅ Popularity
+        score += min(vote / 1000, 30)
+        score += min(pop / 10, 30)
+
+        scored.append((score, m_title))
+
+    if not scored:
         return None
 
-    # 🔥 Pick most popular
-    matched.sort(
-        key=lambda x: (x.get("vote_count", 0), x.get("popularity", 0)),
-        reverse=True
-    )
-
-    return matched[0]["title"]
+    scored.sort(reverse=True, key=lambda x: x[0])
+    return scored[0][1]
     
 
 @Client.on_message(filters.text & filters.private)
