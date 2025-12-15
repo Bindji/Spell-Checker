@@ -87,9 +87,6 @@ def google_suggest(query):
 
     return suggestion.text if suggestion else None
 
-
-print("Result:", suggestion.text if suggestion else "No suggestion found")
-
 # ---------------- GOOGLE SUGGEST ----------------
 
 
