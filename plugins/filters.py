@@ -85,7 +85,7 @@ async def correct_movie_name(query: str):
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
-        "api_key": TMDB_API_KEY,
+        "api_key": API_KEY,
         "query": title,
         "language": "en-US",
         "include_adult": "false"
