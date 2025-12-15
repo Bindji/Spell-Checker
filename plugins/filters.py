@@ -64,7 +64,9 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
     return results[0]["title"]"""
 
 
-# ---------------- GOOGLE SUGGEST ----------------
+import requests
+from bs4 import BeautifulSoup
+
 def google_suggest(query):
     url = f"https://www.google.com/search?q={query}"
     headers = {
@@ -77,11 +79,18 @@ def google_suggest(query):
     resp = requests.get(url, headers=headers)
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Google का "Did you mean" suggestion पकड़ना
-    suggestion = soup.find("a", attrs={"class": "gL9Hy"})
-    if suggestion:
-        return suggestion.text
-    return None
+    # Google suggestion अक्सर <a> या <span> में आता है
+    suggestion = soup.find("a", string=lambda text: text and "Did you mean" not in text)
+    if not suggestion:
+        # fallback: कुछ cases में <span> में आता है
+        suggestion = soup.find("span", string=lambda text: text and "Did you mean" not in text)
+
+    return suggestion.text if suggestion else None
+
+
+print("Result:", suggestion.text if suggestion else "No suggestion found")
+
+# ---------------- GOOGLE SUGGEST ----------------
 
 
 # ---------------- TELEGRAM BOT ----------------
