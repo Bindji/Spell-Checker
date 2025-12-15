@@ -11,12 +11,19 @@ import aiohttp
 
 API_KEY = "6311677ef041038470aae345cd71bb78"
 
-"""async def correct_movie_name(query: str):
+import re
+import aiohttp
+
+API_KEY = "6311677ef041038470aae345cd71bb78"
+
+async def correct_movie_name(query: str):
     query = query.strip()
 
-    # 🔹 year extract
+    # 🔹 Extract year (1900–2099)
     year_match = re.search(r'(19|20)\d{2}', query)
-    year = year_match.group() if year_match else None
+    year = int(year_match.group()) if year_match else None
+
+    # 🔹 Remove year from title
     title = re.sub(r'(19|20)\d{2}', '', query).strip()
 
     url = "https://api.themoviedb.org/3/search/movie"
@@ -27,71 +34,6 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
         "include_adult": "false"
     }
 
-    if year:
-        params["primary_release_year"] = year
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, params=params) as r:
-            data = await r.json()
-
-    if not data.get("results"):
-        return None
-
-    # 🔥 Filter Indian / popular movies
-    results = sorted(
-        data["results"],
-        key=lambda x: (
-            x.get("vote_count", 0),
-            x.get("popularity", 0)
-        ),
-        reverse=True
-    )
-
-    return results[0]["title"]"""
-    
-"""async def correct_movie_name(query):
-    url = "https://api.themoviedb.org/3/search/movie"
-    params = {
-        "api_key": API_KEY,
-        "query": query,
-        "language": "en-US"
-    }
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, params=params) as r:
-            data = await r.json()
-
-    if not data.get("results"):
-        return None
-
-    return data["results"][0]["title"]"""
-
-
-ALLOWED_LANGS = {"hi", "te", "ta"}
-MIN_VOTES = 500   # 🔥 random movies filter
-
-def clean(text):
-    return re.sub(r'[^a-z0-9]', '', text.lower())
-
-async def correct_movie_name(query: str):
-    query = query.strip()
-
-    # 🎯 Year extract
-    year_match = re.search(r'(19|20)\d{2}', query)
-    year = year_match.group() if year_match else None
-
-    # 🎯 Title extract
-    title = re.sub(r'(19|20)\d{2}', '', query).strip()
-    clean_title = clean(title)
-
-    url = "https://api.themoviedb.org/3/search/movie"
-    params = {
-        "api_key": API_KEY,
-        "query": title,
-        "include_adult": "false",
-        "region": "IN"
-    }
-
     async with aiohttp.ClientSession() as session:
         async with session.get(url, params=params) as r:
             data = await r.json()
@@ -100,43 +42,27 @@ async def correct_movie_name(query: str):
     if not results:
         return None
 
-    best = None
-    best_score = 0
+    # 🔥 STRICT YEAR FILTER
+    if year:
+        year_matched = []
+        for movie in results:
+            release_date = movie.get("release_date")
+            if release_date and release_date[:4].isdigit():
+                if int(release_date[:4]) == year:
+                    year_matched.append(movie)
 
-    for m in results:
-        m_title = m.get("title", "")
-        m_lang = m.get("original_language")
-        votes = m.get("vote_count", 0)
-        release = m.get("release_date", "")
+        if year_matched:
+            results = year_matched
+        else:
+            return None  # ❌ year दिया है लेकिन match नहीं मिला
 
-        # ❌ Non-Indian language
-        if m_lang not in ALLOWED_LANGS:
-            continue
+    # 🔥 Sort by popularity + votes
+    results.sort(
+        key=lambda x: (x.get("vote_count", 0), x.get("popularity", 0)),
+        reverse=True
+    )
 
-        # ❌ Low popularity random movies
-        if votes < MIN_VOTES:
-            continue
-
-        # ❌ Year strict
-        if year and (not release or not release.startswith(year)):
-            continue
-
-        score = 0
-        ct = clean(m_title)
-
-        # ✅ Strong title match
-        if clean_title == ct:
-            score += 100
-        elif clean_title in ct:
-            score += 70
-
-        score += votes / 100   # popularity boost
-
-        if score > best_score:
-            best_score = score
-            best = m_title
-
-    return best
+    return results[0]["title"]
 
 @Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
