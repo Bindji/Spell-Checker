@@ -59,8 +59,20 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
 
     return results[0]["title"]"""
 
+
+# 🔥 RapidFuzz smart scorer
+def similarity_score(a, b):
+    return max(
+        fuzz.ratio(a, b),
+        fuzz.partial_ratio(a, b),
+        fuzz.token_sort_ratio(a, b)
+    )
+
+# 🎬 Movie name corrector
 async def correct_movie_name(query: str):
     query = query.strip()
+    if not query:
+        return None
 
     # 🔹 Extract year (1900–2099)
     year_match = re.search(r'(19|20)\d{2}', query)
@@ -68,10 +80,12 @@ async def correct_movie_name(query: str):
 
     # 🔹 Remove year from title
     title = re.sub(r'(19|20)\d{2}', '', query).strip().lower()
+    if not title:
+        return None
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
-        "api_key": API_KEY,
+        "api_key": TMDB_API_KEY,
         "query": title,
         "language": "en-US",
         "include_adult": "false"
@@ -94,19 +108,18 @@ async def correct_movie_name(query: str):
         if not results:
             return None
 
-    # 🔥 SPELLING SIMILARITY FILTER
+    # 🔥 SPELLING + POPULARITY FILTER
     scored = []
     for movie in results:
         tmdb_title = (movie.get("title") or "").lower()
         original_title = (movie.get("original_title") or "").lower()
 
-        score1 = fuzz.ratio(title, tmdb_title)
-        score2 = fuzz.ratio(title, original_title)
-
+        score1 = similarity_score(title, tmdb_title)
+        score2 = similarity_score(title, original_title)
         best_score = max(score1, score2)
 
-        # ❌ unrelated titles reject
-        if best_score < 70:
+        # ❌ unrelated reject
+        if best_score < 60:
             continue
 
         scored.append((best_score, movie))
@@ -114,18 +127,25 @@ async def correct_movie_name(query: str):
     if not scored:
         return None
 
-    # 🔥 Best match first
+    # 🔥 Sort: similarity → votes → popularity
     scored.sort(
         key=lambda x: (
-            x[0],                          # similarity
+            x[0],
             x[1].get("vote_count", 0),
             x[1].get("popularity", 0)
         ),
         reverse=True
     )
 
-    return scored[0][1]["title"]
-    
+    movie = scored[0][1]
+    title = movie["title"]
+    year = movie.get("release_date", "")[:4]
+
+    if year:
+        return f"{title} ({year})"
+    return title
+
+
 @Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
     wait = await message.reply("🔍 Searching correct name...")
