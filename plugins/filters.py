@@ -67,9 +67,10 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
     return data["results"][0]["title"]"""
 
 
-INDIAN_LANGS = {"hi", "te", "ta", "ml", "kn"}
+ALLOWED_LANGS = {"hi", "te", "ta"}
+MIN_VOTES = 500   # 🔥 random movies filter
 
-def normalize(text: str):
+def clean(text):
     return re.sub(r'[^a-z0-9]', '', text.lower())
 
 async def correct_movie_name(query: str):
@@ -77,17 +78,18 @@ async def correct_movie_name(query: str):
 
     # 🎯 Year extract
     year_match = re.search(r'(19|20)\d{2}', query)
-    year = int(year_match.group()) if year_match else None
+    year = year_match.group() if year_match else None
 
     # 🎯 Title extract
     title = re.sub(r'(19|20)\d{2}', '', query).strip()
-    norm_title = normalize(title)
+    clean_title = clean(title)
 
     url = "https://api.themoviedb.org/3/search/movie"
     params = {
         "api_key": API_KEY,
         "query": title,
-        "include_adult": "false"
+        "include_adult": "false",
+        "region": "IN"
     }
 
     async with aiohttp.ClientSession() as session:
@@ -98,45 +100,43 @@ async def correct_movie_name(query: str):
     if not results:
         return None
 
-    scored = []
+    best = None
+    best_score = 0
 
     for m in results:
         m_title = m.get("title", "")
-        m_norm = normalize(m_title)
-        lang = m.get("original_language")
-        vote = m.get("vote_count", 0)
-        pop = m.get("popularity", 0)
+        m_lang = m.get("original_language")
+        votes = m.get("vote_count", 0)
         release = m.get("release_date", "")
 
+        # ❌ Non-Indian language
+        if m_lang not in ALLOWED_LANGS:
+            continue
+
+        # ❌ Low popularity random movies
+        if votes < MIN_VOTES:
+            continue
+
         # ❌ Year strict
-        if year:
-            if not release or release[:4] != str(year):
-                continue
+        if year and (not release or not release.startswith(year)):
+            continue
 
         score = 0
+        ct = clean(m_title)
 
-        # ✅ Title similarity
-        if norm_title in m_norm:
-            score += 50
-        if m_norm.startswith(norm_title):
-            score += 20
+        # ✅ Strong title match
+        if clean_title == ct:
+            score += 100
+        elif clean_title in ct:
+            score += 70
 
-        # ✅ Indian language boost
-        if lang in INDIAN_LANGS:
-            score += 40
+        score += votes / 100   # popularity boost
 
-        # ✅ Popularity
-        score += min(vote / 1000, 30)
-        score += min(pop / 10, 30)
+        if score > best_score:
+            best_score = score
+            best = m_title
 
-        scored.append((score, m_title))
-
-    if not scored:
-        return None
-
-    scored.sort(reverse=True, key=lambda x: x[0])
-    return scored[0][1]
-    
+    return best
 
 @Client.on_message(filters.text & filters.private)
 async def movie_handler(client, message):
