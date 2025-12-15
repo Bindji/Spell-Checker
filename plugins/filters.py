@@ -24,7 +24,7 @@ async def correct_movie_name(query: str):
         "api_key": API_KEY,
         "query": title,
         "language": "en-US",
-        "include_adult": False
+        "include_adult": "false"
     }
 
     if year:
