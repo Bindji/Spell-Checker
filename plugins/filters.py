@@ -26,7 +26,31 @@ async def correct_movie_name(query):
     if not data.get("results"):
         return None
 
-    return data["results"][0]["title"]
+    # 🔥 Sort by popularity (HIGH → LOW)
+    results = sorted(
+        data["results"],
+        key=lambda x: x.get("popularity", 0),
+        reverse=True
+    )
+
+    return results[0]["title"]
+    
+"""async def correct_movie_name(query):
+    url = "https://api.themoviedb.org/3/search/movie"
+    params = {
+        "api_key": API_KEY,
+        "query": query,
+        "language": "en-US"
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, params=params) as r:
+            data = await r.json()
+
+    if not data.get("results"):
+        return None
+
+    return data["results"][0]["title"]"""
 
 
 
