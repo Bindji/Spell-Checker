@@ -60,25 +60,56 @@ API_KEY = "6311677ef041038470aae345cd71bb78"
     return results[0]["title"]"""
 
 
-# 🔥 RapidFuzz smart scorer
-def similarity_score(a, b):
-    return max(
-        fuzz.ratio(a, b),
-        fuzz.partial_ratio(a, b),
-        fuzz.token_sort_ratio(a, b)
-    )
+def phonetic_normalize(text: str) -> str:
+    text = text.lower()
 
+    replacements = {
+        "aa": "a",
+        "ee": "i",
+        "oo": "u",
+        "ph": "f",
+        "bh": "b",
+        "dh": "d",
+        "th": "t",
+        "kh": "k",
+        "gh": "g",
+        "sh": "s",
+        "ch": "c",
+        "zh": "j",
+        "y": "i"
+    }
+
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    # remove non letters
+    text = re.sub(r'[^a-z]', '', text)
+    # remove repeated letters
+    text = re.sub(r'(.)\1+', r'\1', text)
+    return text
+
+def smart_score(user_title, tmdb_title):
+    # raw score
+    s1 = fuzz.ratio(user_title, tmdb_title)
+    s2 = fuzz.token_sort_ratio(user_title, tmdb_title)
+
+    # phonetic score
+    p1 = phonetic_normalize(user_title)
+    p2 = phonetic_normalize(tmdb_title)
+    s3 = fuzz.ratio(p1, p2)
+
+    return max(s1, s2, s3)
+    
 # 🎬 Movie name corrector
 async def correct_movie_name(query: str):
     query = query.strip()
     if not query:
         return None
 
-    # 🔹 Extract year (1900–2099)
+    # 🔹 Extract year
     year_match = re.search(r'(19|20)\d{2}', query)
     year = int(year_match.group()) if year_match else None
 
-    # 🔹 Remove year from title
+    # 🔹 Clean title
     title = re.sub(r'(19|20)\d{2}', '', query).strip().lower()
     if not title:
         return None
@@ -99,7 +130,7 @@ async def correct_movie_name(query: str):
     if not results:
         return None
 
-    # 🔥 STRICT YEAR FILTER
+    # 🔥 Strict year match
     if year:
         results = [
             m for m in results
@@ -108,26 +139,24 @@ async def correct_movie_name(query: str):
         if not results:
             return None
 
-    # 🔥 SPELLING + POPULARITY FILTER
     scored = []
     for movie in results:
         tmdb_title = (movie.get("title") or "").lower()
         original_title = (movie.get("original_title") or "").lower()
 
-        score1 = similarity_score(title, tmdb_title)
-        score2 = similarity_score(title, original_title)
-        best_score = max(score1, score2)
+        score = max(
+            smart_score(title, tmdb_title),
+            smart_score(title, original_title)
+        )
 
-        # ❌ unrelated reject
-        if best_score < 60:
+        if score < 60:
             continue
 
-        scored.append((best_score, movie))
+        scored.append((score, movie))
 
     if not scored:
         return None
 
-    # 🔥 Sort: similarity → votes → popularity
     scored.sort(
         key=lambda x: (
             x[0],
@@ -138,12 +167,9 @@ async def correct_movie_name(query: str):
     )
 
     movie = scored[0][1]
-    title = movie["title"]
     year = movie.get("release_date", "")[:4]
 
-    if year:
-        return f"{title} ({year})"
-    return title
+    return f"{movie['title']} ({year})" if year else movie["title"]
 
 
 @Client.on_message(filters.text & filters.private)
